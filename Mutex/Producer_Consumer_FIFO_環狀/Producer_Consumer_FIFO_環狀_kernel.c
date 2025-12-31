@@ -1,37 +1,37 @@
-#include<linux/module.h>
-#include<linux/kernel.h>
-#include<linux/init.h>
-#include<linux/kthread.h>
-#include<linux/mutex.h>
-#include<linux/wait.h>
-#include<linux/delay.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/init.h>
+#include <linux/kthread.h>
+#include <linux/mutex.h>
+#include <linux/wait.h>
+#include <linux/delay.h>
 
 #define BUFFER_SIZE 5
 
-staticint buffer[BUFFER_SIZE];
-staticint front =0;
-staticint rear  =0;
+static int buffer[BUFFER_SIZE];
+static int front =0;
+static int rear  =0;
 
-staticstructmutexlock;
-staticwait_queue_head_t not_full;
-staticwait_queue_head_t not_empty;
+static struct mutex lock;
+static wait_queue_head_t not_full;
+static wait_queue_head_t not_empty;
 
-staticstructtask_struct *producer_thread;
-staticstructtask_struct *consumer_thread;
+static struct task_struct *producer_thread;
+static struct task_struct *consumer_thread;
 
 /* 判斷空 / 滿（與 user space 相同邏輯） */
-staticboolis_empty(void)
+static bool is_empty(void)
 {
 return front == rear;
 }
 
-staticboolis_full(void)
+static bool is_full(void)
 {
 return (rear +1) % BUFFER_SIZE == front;
 }
 
 /* Producer thread */
-staticintproducer_fn(void *data)
+static int producer_fn(void *data)
 {
 int item =1;
 
@@ -56,11 +56,11 @@ while (is_full()) {
         msleep(1000);
     }
 
-return0;
+return 0;
 }
 
 /* Consumer thread */
-staticintconsumer_fn(void *data)
+static int consumer_fn(void *data)
 {
 int item;
 
@@ -84,11 +84,11 @@ while (is_empty()) {
         msleep(2000);
     }
 
-return0;
+return 0;
 }
 
 /* module init */
-staticint __initpc_init(void)
+static int __initpc_init(void)
 {
     pr_info("Producer-Consumer kernel module init\n");
 
@@ -99,11 +99,11 @@ staticint __initpc_init(void)
     producer_thread = kthread_run(producer_fn,NULL,"producer_kthread");
     consumer_thread = kthread_run(consumer_fn,NULL,"consumer_kthread");
 
-return0;
+return 0;
 }
 
 /* module exit */
-staticvoid __exitpc_exit(void)
+static void __exitpc_exit(void)
 {
 if (producer_thread)
         kthread_stop(producer_thread);
