@@ -1,57 +1,53 @@
+// lifo_pc_kmod.c
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/init.h>
 #include <linux/kthread.h>
 #include <linux/mutex.h>
 #include <linux/delay.h>
 #include <linux/wait.h>
 
-#define BUFFER_SIZE 5
+#define STACK_SIZE 5
 
-static int buffer[BUFFER_SIZE];
-static int front = 0;
-static int rear  = 0;
+static int stack[STACK_SIZE];
+static int top = 0;
 
 static struct mutex lock;
 static wait_queue_head_t not_full;
 static wait_queue_head_t not_empty;
 
-static struct task_struct *producer_task;
-static struct task_struct *consumer_task;
+static struct task_struct *producer_thread;
+static struct task_struct *consumer_thread;
 
-/* 判斷是否空或滿 */
-static int is_empty(void)
-{
-    return front == rear;
-}
-
-static int is_full(void)
-{
-    return (rear + 1) % BUFFER_SIZE == front;
-}
+/* 判斷 stack 是否空或滿 */
+static inline int isEmpty(void) { return top == 0; }
+static inline int isFull(void) { return top == STACK_SIZE; }
 
 /* Producer thread */
 static int producer_fn(void *data)
 {
-    int i = 1;
+    int item = 0;
 
-    while (!kthread_should_stop() && i <= 10) {
+    while (!kthread_should_stop())
+    {
+        item++;
+
         mutex_lock(&lock);
+        while (isFull())
+        {
+            mutex_unlock(&lock);
+            wait_event_interruptible(not_full, !isFull());
+            mutex_lock(&lock);
+        }
 
-        /* buffer 滿就睡 */
-        wait_event(not_full, !is_full());
-
-        buffer[rear] = i;
-        rear = (rear + 1) % BUFFER_SIZE;
-
-        pr_info("[Producer] Produced: %d\n", i);
-        i++;
+        stack[top++] = item;  // push
+        pr_info("Produced: %d (top=%d)\n", item, top);
 
         wake_up(&not_empty);
         mutex_unlock(&lock);
 
         msleep(1000);
     }
+
     return 0;
 }
 
@@ -60,60 +56,62 @@ static int consumer_fn(void *data)
 {
     int item;
 
-    while (!kthread_should_stop()) {
+    while (!kthread_should_stop())
+    {
         mutex_lock(&lock);
+        while (isEmpty())
+        {
+            mutex_unlock(&lock);
+            wait_event_interruptible(not_empty, !isEmpty());
+            mutex_lock(&lock);
+        }
 
-        /* buffer 空就睡 */
-        wait_event(not_empty, !is_empty());
-
-        item = buffer[front];
-        front = (front + 1) % BUFFER_SIZE;
-
-        pr_info("[Consumer] Consumed: %d\n", item);
+        item = stack[--top];  // pop
+        pr_info("Consumed: %d (top=%d)\n", item, top);
 
         wake_up(&not_full);
         mutex_unlock(&lock);
 
         msleep(2000);
     }
+
     return 0;
 }
 
-/* Module init */
-static int __init pc_init(void)
+static int __init lifo_pc_init(void)
 {
-    pr_info("Producer-Consumer kernel module loaded\n");
+    pr_info("LIFO Producer-Consumer kernel module init\n");
 
     mutex_init(&lock);
     init_waitqueue_head(&not_full);
     init_waitqueue_head(&not_empty);
 
-    producer_task = kthread_run(producer_fn, NULL, "pc_producer");
-    consumer_task = kthread_run(consumer_fn, NULL, "pc_consumer");
+    producer_thread = kthread_run(producer_fn, NULL, "producer_thread");
+    if (IS_ERR(producer_thread))
+        pr_err("Failed to create producer thread\n");
 
-    if (IS_ERR(producer_task) || IS_ERR(consumer_task)) {
-        pr_err("Failed to create kthreads\n");
-        return -ENOMEM;
-    }
+    consumer_thread = kthread_run(consumer_fn, NULL, "consumer_thread");
+    if (IS_ERR(consumer_thread))
+        pr_err("Failed to create consumer thread\n");
 
     return 0;
 }
 
-/* Module exit */
-static void __exit pc_exit(void)
+static void __exit lifo_pc_exit(void)
 {
-    if (producer_task)
-        kthread_stop(producer_task);
-    if (consumer_task)
-        kthread_stop(consumer_task);
+    if (producer_thread)
+        kthread_stop(producer_thread);
+    if (consumer_thread)
+        kthread_stop(consumer_thread);
 
-    pr_info("Producer-Consumer kernel module unloaded\n");
+    pr_info("LIFO Producer-Consumer kernel module exit\n");
 }
 
-module_init(pc_init);
-module_exit(pc_exit);
+module_init(lifo_pc_init);
+module_exit(lifo_pc_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("You");
-MODULE_DESCRIPTION("Kernel Producer-Consumer Example");
+MODULE_AUTHOR("BMC Example");
+MODULE_DESCRIPTION("LIFO Producer-Consumer kernel module example");
+
 
