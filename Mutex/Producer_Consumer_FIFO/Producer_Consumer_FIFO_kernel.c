@@ -9,9 +9,9 @@
 #define BUFFER_SIZE 5
 
 static int buffer[BUFFER_SIZE];
-static int count =0;
-static int front =0;
-static int rear =0;
+static int count = 0;
+static int front = 0;
+static int rear = 0;
 
 static struct mutex lock;
 static wait_queue_head_t not_full;
@@ -23,19 +23,19 @@ static struct task_struct *consumer_thread;
 /* ================= Producer ================= */
 static int producer_fn(void *data)
 {
-int item =1;
+    int item = 1;
 
-while (!kthread_should_stop() && item <=10) {
+    while (!kthread_should_stop() && item <= 10) {
 
         mutex_lock(&lock);
-while (count == BUFFER_SIZE) {
+        while (count == BUFFER_SIZE) {
             mutex_unlock(&lock);
             wait_event_interruptible(not_full, count < BUFFER_SIZE);
             mutex_lock(&lock);
         }
 
         buffer[rear] = item;
-        rear = (rear +1) % BUFFER_SIZE;
+        rear = (rear + 1) % BUFFER_SIZE;
         count++;
 
         pr_info("[Producer] produced %d (count=%d)\n", item, count);
@@ -47,25 +47,25 @@ while (count == BUFFER_SIZE) {
         msleep(1000);
     }
 
-return 0;
+    return 0;
 }
 
 /* ================= Consumer ================= */
 static int consumer_fn(void *data)
 {
-int item;
+    int item;
 
-while (!kthread_should_stop()) {
+    while (!kthread_should_stop()) {
 
         mutex_lock(&lock);
-while (count ==0) {
+        while (count == 0) {
             mutex_unlock(&lock);
-            wait_event_interruptible(not_empty, count >0);
+            wait_event_interruptible(not_empty, count > 0);
             mutex_lock(&lock);
         }
 
         item = buffer[front];
-        front = (front +1) % BUFFER_SIZE;
+        front = (front + 1) % BUFFER_SIZE;
         count--;
 
         pr_info("[Consumer] consumed %d (count=%d)\n", item, count);
@@ -76,7 +76,7 @@ while (count ==0) {
         msleep(2000);
     }
 
-return 0;
+    return 0;
 }
 
 /* ================= Module init ================= */
@@ -88,23 +88,23 @@ static int __init pc_init(void)
     init_waitqueue_head(&not_full);
     init_waitqueue_head(&not_empty);
 
-    producer_thread = kthread_run(producer_fn,NULL,"pc_producer");
-    consumer_thread = kthread_run(consumer_fn,NULL,"pc_consumer");
+    producer_thread = kthread_run(producer_fn, NULL, "pc_producer");
+    consumer_thread = kthread_run(consumer_fn, NULL, "pc_consumer");
 
-if (IS_ERR(producer_thread) || IS_ERR(consumer_thread)) {
+    if (IS_ERR(producer_thread) || IS_ERR(consumer_thread)) {
         pr_err("Failed to create threads\n");
-return -ENOMEM;
+        return -ENOMEM;
     }
 
-return 0;
+    return 0;
 }
 
 /* ================= Module exit ================= */
 static void __exit pc_exit(void)
 {
-if (producer_thread)
+    if (producer_thread)
         kthread_stop(producer_thread);
-if (consumer_thread)
+    if (consumer_thread)
         kthread_stop(consumer_thread);
 
     pr_info("Producer-Consumer module exit\n");
