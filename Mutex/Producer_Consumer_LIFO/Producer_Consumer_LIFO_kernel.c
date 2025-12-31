@@ -1,37 +1,37 @@
-#include<linux/module.h>
-#include<linux/kernel.h>
-#include<linux/init.h>
-#include<linux/kthread.h>
-#include<linux/mutex.h>
-#include<linux/delay.h>
-#include<linux/wait.h>
+#include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/init.h>
+#include <linux/kthread.h>
+#include <linux/mutex.h>
+#include <linux/delay.h>
+#include <linux/wait.h>
 
 #define BUFFER_SIZE 5
 
-staticint buffer[BUFFER_SIZE];
-staticint front =0;
-staticint rear  =0;
+static int buffer[BUFFER_SIZE];
+static int front =0;
+static int rear  =0;
 
-staticstructmutexlock;
-staticwait_queue_head_t not_full;
-staticwait_queue_head_t not_empty;
+static struct mutex lock;
+static wait_queue_head_t not_full;
+static wait_queue_head_t not_empty;
 
-staticstructtask_struct *producer_task;
-staticstructtask_struct *consumer_task;
+static struct task_struct *producer_task;
+static struct task_struct *consumer_task;
 
 /* 判斷是否空或滿 */
-staticintis_empty(void)
+static int is_empty(void)
 {
 return front == rear;
 }
 
-staticintis_full(void)
+static int is_full(void)
 {
 return (rear +1) % BUFFER_SIZE == front;
 }
 
 /* Producer thread */
-staticintproducer_fn(void *data)
+static int producer_fn(void *data)
 {
 int i =1;
 
@@ -52,11 +52,11 @@ while (!kthread_should_stop() && i <=10) {
 
         msleep(1000);
     }
-return0;
+return 0;
 }
 
 /* Consumer thread */
-staticintconsumer_fn(void *data)
+static int consumer_fn(void *data)
 {
 int item;
 
@@ -76,11 +76,11 @@ while (!kthread_should_stop()) {
 
         msleep(2000);
     }
-return0;
+return 0;
 }
 
 /* Module init */
-staticint __initpc_init(void)
+static int __init pc_init(void)
 {
     pr_info("Producer-Consumer kernel module loaded\n");
 
@@ -96,11 +96,11 @@ if (IS_ERR(producer_task) || IS_ERR(consumer_task)) {
 return -ENOMEM;
     }
 
-return0;
+return 0;
 }
 
 /* Module exit */
-staticvoid __exitpc_exit(void)
+static void __exit pc_exit(void)
 {
 if (producer_task)
         kthread_stop(producer_task);
