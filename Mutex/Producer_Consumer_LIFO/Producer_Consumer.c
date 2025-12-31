@@ -2,33 +2,42 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#define BUFFER_SIZE 5
-int buffer[BUFFER_SIZE];
-int front = 0;  // ®ø¶OªÌ¨ú¸ê®Æ¦ì¸m
-int rear = 0;   // ¥Í²£ªÌ©ñ¸ê®Æ¦ì¸m
+#define STACK_SIZE 5
+
+int stack[STACK_SIZE];
+int top = 0;   // æŒ‡å‘ä¸‹ä¸€å€‹å¯æ”¾ä½ç½®ï¼ˆå…ƒç´ æ•¸é‡ï¼‰
 
 pthread_mutex_t lock;
-pthread_cond_t not_full, not_empty;
+pthread_cond_t not_full;
+pthread_cond_t not_empty;
 
-// §PÂ_¬O§_ªÅ©Îº¡
-int isEmpty() {
-    return front == rear;
+/* åˆ¤æ–· stack æ˜¯å¦ç©ºæˆ–æ»¿ */
+int isEmpty(void)
+{
+    return top == 0;
 }
 
-int isFull() {
-    return (rear + 1) % BUFFER_SIZE == front;
+int isFull(void)
+{
+    return top == STACK_SIZE;
 }
 
-void* producer(void* arg) {
-    for (int i = 1; i <= 10; i++) {
+/* Producerï¼špush */
+void* producer(void* arg)
+{
+    int item = 0;
+
+    while (1)
+    {
+        item++;
+
         pthread_mutex_lock(&lock);
 
         while (isFull())
             pthread_cond_wait(&not_full, &lock);
 
-        buffer[rear] = i;
-        rear = (rear + 1) % BUFFER_SIZE;
-        printf("Produced: %d\n", i);
+        stack[top++] = item;   // push
+        printf("Produced: %d (top=%d)\n", item, top);
 
         pthread_cond_signal(&not_empty);
         pthread_mutex_unlock(&lock);
@@ -38,16 +47,20 @@ void* producer(void* arg) {
     return NULL;
 }
 
-void* consumer(void* arg) {
-    for (int i = 1; i <= 10; i++) {
+/* Consumerï¼špop */
+void* consumer(void* arg)
+{
+    int item;
+
+    while (1)
+    {
         pthread_mutex_lock(&lock);
 
         while (isEmpty())
             pthread_cond_wait(&not_empty, &lock);
 
-        int item = buffer[front];
-        front = (front + 1) % BUFFER_SIZE;
-        printf("Consumed: %d\n", item);
+        item = stack[--top];   // pop
+        printf("Consumed: %d (top=%d)\n", item, top);
 
         pthread_cond_signal(&not_full);
         pthread_mutex_unlock(&lock);
@@ -57,7 +70,8 @@ void* consumer(void* arg) {
     return NULL;
 }
 
-int main() {
+int main(void)
+{
     pthread_t prod, cons;
 
     pthread_mutex_init(&lock, NULL);
@@ -76,3 +90,4 @@ int main() {
 
     return 0;
 }
+
