@@ -4,64 +4,61 @@
 #include <condition_variable>
 #include <chrono>
 
-#define BUFFER_SIZE 5
+#define STACK_SIZE 5
 
-int buffer[BUFFER_SIZE];
-int front = 0;  // consumer index
-int rear  = 0;  // producer index
+int stack[STACK_SIZE];
+int top = 0;   // 指向下一個可放位置（元素數量）
 
 std::mutex mtx;
 std::condition_variable not_full;
 std::condition_variable not_empty;
 
-// 判斷是否空或滿
-bool isEmpty() {
-    return front == rear;
-}
+// 判斷 stack 是否空或滿
+bool isEmpty() { return top == 0; }
+bool isFull() { return top == STACK_SIZE; }
 
-bool isFull() {
-    return (rear + 1) % BUFFER_SIZE == front;
-}
+// Producer：push
+void producer()
+{
+    int item = 0;
+    while (true)
+    {
+        item++;
 
-void producer() {
-    for (int i = 1; i <= 10; i++) {
         std::unique_lock<std::mutex> lock(mtx);
+        not_full.wait(lock, [] { return !isFull(); });
 
-        not_full.wait(lock, [] {
-            return !isFull();
-        });
+        stack[top++] = item;
+        std::cout << "Produced: " << item << " (top=" << top << ")" << std::endl;
 
-        buffer[rear] = i;
-        rear = (rear + 1) % BUFFER_SIZE;
-        std::cout << "Produced: " << i << std::endl;
-
-        not_empty.notify_one();
         lock.unlock();
+        not_empty.notify_one();
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 }
 
-void consumer() {
-    for (int i = 1; i <= 10; i++) {
+// Consumer：pop
+void consumer()
+{
+    int item;
+    while (true)
+    {
         std::unique_lock<std::mutex> lock(mtx);
+        not_empty.wait(lock, [] { return !isEmpty(); });
 
-        not_empty.wait(lock, [] {
-            return !isEmpty();
-        });
+        item = stack[--top];
+        std::cout << "Consumed: " << item << " (top=" << top << ")" << std::endl;
 
-        int item = buffer[front];
-        front = (front + 1) % BUFFER_SIZE;
-        std::cout << "Consumed: " << item << std::endl;
-
-        not_full.notify_one();
         lock.unlock();
+        not_full.notify_one();
 
         std::this_thread::sleep_for(std::chrono::seconds(2));
     }
 }
 
-int main() {
+int main()
+{
     std::thread prod(producer);
     std::thread cons(consumer);
 
@@ -70,5 +67,6 @@ int main() {
 
     return 0;
 }
+
 
 
